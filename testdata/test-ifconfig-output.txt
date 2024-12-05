@@ -1,0 +1,12 @@
+vlan10: flags=8943<UP,BROADCAST,RUNNING,PROMISC,SIMPLEX,MULTICAST> metric 0 mtu 1500
+	description: mgt_switches
+	ether b4:2e:99:69:71:1d
+	inet 172.16.186.158 netmask 0xffffffe0 broadcast 172.16.186.159 vhid 51
+	inet6 2001:14:beef:20de::1 prefixlen 64 vhid 51
+	inet6 fe80::1%vlan10 prefixlen 64 scopeid 0x12 vhid 51
+	groups: vlan
+	carp: MASTER vhid 51 advbase 2 advskew 50
+	vlan: 10 vlanpcp: 0 parent interface: igb1
+	media: Ethernet autoselect (1000baseT <full-duplex>)
+	status: active
+	nd6 options=101<PERFORMNUD,NO_DAD>
