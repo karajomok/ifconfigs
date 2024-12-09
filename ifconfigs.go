@@ -7,68 +7,116 @@ import (
 	"strings"
 
 	// "os/exec"
-
 	"strconv"
 )
 
 type NetworkInterface struct {
-	Name        string
-	Status      string
-	Parent      string
-	MAC         string
-	MTU         string
-	Description string
-	IP          string
-	Vhid        string
-	CARP        string
+	Name        string   `json:"name"`
+	Status      string   `json:"status"`
+	Type        string   `json:"type"`
+	Parent      string   `json:"parent"`
+	VlanID      string   `json:"vlanid"`
+	MAC         string   `json:"mac"`
+	MTU         string   `json:"mtu"`
+	Description string   `json:"description"`
+	IpAddresses []IPinfo `json:"ipaddresses"`
 }
 
-func GetIfconfigData() (string, error) {
-	// out, err := os.ReadFile("raw-ifconfig.txt")
-	out, err := os.ReadFile("ifconfig-output.raw.txt")
-	// out, err := exec.Command("ifconfig", "-v").Output()
+type IPinfo struct {
+	IP      string `json:"ip"`
+	CARP    string `json:"carp"`
+	VHID    string `json:"vhid"`
+	Advbase string `json:"advbase"`
+	Advskew string `json:"advskew"`
+}
+
+func GetOutput() (string, error) {
+	// temp
+	out, err := os.ReadFile("testdata/test-ifconfig-output.txt")
+	// out, err := exec.Command("ifconfig").Output()
 	if err != nil {
 		return "", err
 	}
 	return string(out), nil
 }
 
-func ParseIfconfig(ifconfig string) []NetworkInterface {
+func Parse(ifconfig string) ([]NetworkInterface, error) {
+	// if runtime.GOOS == "freebsd" {
+	// 	res, err := freebsdParser(ifconfig)
+	// 	if err != nil {
+	// 		fmt.Println(err)
+	// 		return res, err
+	// 	}
+	// 	return res, nil
+	// } else {
+	// 	return []NetworkInterface{}, fmt.Errorf("OS: %v not supported yet", runtime.GOOS)
+	// }
+	res, err := freebsdParser(ifconfig)
+	if err != nil {
+		fmt.Println(err)
+		return res, err
+	}
+	return res, nil
+}
+
+func freebsdParser(ifconfig string) ([]NetworkInterface, error) {
 	var interfaces []NetworkInterface
 
-	// vlan2600: flags=8943<UP,BROADCAST,RUNNING,PROMISC,SIMPLEX,MULTICAST> metric 0 mtu 1500
+	// vlan10: flags=8943<UP,BROADCAST,RUNNING,PROMISC,SIMPLEX,MULTICAST> metric 0 mtu 1500
 	reName := regexp.MustCompile(`^(\w+): flags=`)
-	// status: no carrier
+	// status: active
 	reStatus := regexp.MustCompile(`status: (active|no carrier)`)
-	// ether b4:2e:99:58:54:df
-	reMAC := regexp.MustCompile(`ether ((?:\w+:?)+)`)
-	// description: -- TECH DEP --
-	reDescription := regexp.MustCompile(`description: (\S+)`)
-	// vlan2600: flags=8943<UP,BROADCAST,RUNNING,PROMISC,SIMPLEX,MULTICAST> metric 0 mtu 1500
+	// groups: vlan
+	reType := regexp.MustCompile(`groups: (\w+)`)
+	// parent interface: igb1
+	reParent := regexp.MustCompile(`parent interface: (\w+)`)
+	// vlan: 10
+	reVlanID := regexp.MustCompile(`vlan: (\d+) vlanpcp`)
+	// ether b4:2e:99:69:71:1d
+	reMAC := regexp.MustCompile(`ether ((?:\w{1,2}:){5}\w{1,2})`)
+	// description: mgt_switches
+	reDescription := regexp.MustCompile(`description: (.*)`)
+	// vlan10: flags=8943<UP,BROADCAST,RUNNING,PROMISC,SIMPLEX,MULTICAST> metric 0 mtu 1500
 	reMTU := regexp.MustCompile(`mtu (\d+)`)
-	// inet 10.212.226.254 netmask 0xffffff00 broadcast 10.212.226.255 vhid 226
-	reIPv4 := regexp.MustCompile(`inet (?P<ipv4>(?:\d+.?)+) netmask (?P<mask>\S+)(?:.*vhid (?P<vhid>\d+))?`)
-	// inet6 fc00:1:1:1::1 prefixlen 64 vhid 108
-	reIPv6 := regexp.MustCompile(`inet6 (?P<ipv6>(?:\w+::?)+\w+) prefixlen (?P<prefix>\d+)( vhid (?P<vhid>\d+))?`)
-	// carp: INIT vhid 108 advbase 2 advskew 100
-	reCARP := regexp.MustCompile(`carp: (?P<status>\S+) vhid (?P<vhid>\d+)`)
+	// inet 198.51.100.30 netmask 0xffffffe0 broadcast 198.51.100.31 vhid 51
+	reIPv4 := regexp.MustCompile(`inet (?P<ipv4>(?:\d{1,3}.){3}\d{1,3}) netmask (?P<mask>\S+) broadcast (?P<ipv4>(?:\d{1,3}.){3}\d{1,3}) ?(?:vhid (?P<vhid>\d+))?`)
+	// inet6 2001:db8:beef:305::1 prefixlen 64 vhid 181
+	reIPv6 := regexp.MustCompile(`inet6 (?P<ipv6>(?:\w{1,4}::?)+\w{1,4}) prefixlen (?P<prefix>\d+)( vhid (?P<vhid>\d+))?`)
+	// carp: MASTER vhid 51 advbase 2 advskew 50
+	reCARP := regexp.MustCompile(`carp: (?P<status>\S+) vhid (?P<vhid>\d+) advbase (?P<advbase>\d+) advskew (?P<advskew>\d+)`)
 
-	// Need for os.exec
-	lines := strings.Split(strings.ReplaceAll(ifconfig, "\n\t", "\t"), "\n")
-	// lines := strings.Split(ifconfig, "<blank>")
+	// Add a new line separator "[<tOsMo>]" between interfaces, so it's easier to separate them
+	tempReplace := strings.ReplaceAll(ifconfig, "\n\t", "\t")
+	lineBreak := strings.ReplaceAll(tempReplace, "\n", "[<tOsMo>]")
+	lines := strings.Split(strings.ReplaceAll(lineBreak, "\t", "\n"), "[<tOsMo>]")
 
 	for _, line := range lines {
-		fmt.Println(line)
 		var currentInterface NetworkInterface
-		var subInterfaces []map[string]string
-		carpstat := map[string]string{}
+		carpstat := map[string]map[string]string{}
 
 		if match := reName.FindStringSubmatch(line); match != nil {
 			currentInterface.Name = match[1]
 		}
 
 		if match := reStatus.FindStringSubmatch(line); match != nil {
-			currentInterface.Status = match[1]
+			if match[1] == "active" {
+				currentInterface.Status = "up"
+			} else {
+				currentInterface.Status = "down"
+			}
+
+		}
+
+		if match := reType.FindStringSubmatch(line); match != nil {
+			currentInterface.Type = match[1]
+		}
+
+		if match := reParent.FindStringSubmatch(line); match != nil {
+			currentInterface.Parent = match[1]
+		}
+
+		if match := reVlanID.FindStringSubmatch(line); match != nil {
+			currentInterface.VlanID = match[1]
 		}
 
 		if match := reMAC.FindStringSubmatch(line); match != nil {
@@ -79,8 +127,24 @@ func ParseIfconfig(ifconfig string) []NetworkInterface {
 			currentInterface.Description = match[1]
 		}
 
+		if match := reMTU.FindStringSubmatch(line); match != nil {
+			currentInterface.MTU = match[1]
+		}
+
+		if match := reCARP.FindAllStringSubmatch(line, -1); match != nil {
+			for _, v := range match {
+				carpVhid := v[reCARP.SubexpIndex("vhid")]
+				carpstat[carpVhid] = map[string]string{
+					"status":  v[reCARP.SubexpIndex("status")],
+					"advbase": v[reCARP.SubexpIndex("advbase")],
+					"advskew": v[reCARP.SubexpIndex("advskew")],
+				}
+			}
+		}
+
 		if match := reIPv4.FindAllStringSubmatch(line, -1); match != nil {
 			for _, ip := range match {
+				ipaddress := IPinfo{}
 				ipv4 := ip[reIPv4.SubexpIndex("ipv4")]
 				mask := ip[reIPv4.SubexpIndex("mask")]
 				prefix, err := NetmaskHexToPrefix(mask)
@@ -88,68 +152,42 @@ func ParseIfconfig(ifconfig string) []NetworkInterface {
 					prefix = "unknown"
 				}
 				vhid := ip[reIPv4.SubexpIndex("vhid")]
-
-				sub := map[string]string{}
-				sub["ip"] = ipv4 + "/" + prefix
-				sub["vhid"] = vhid
-				subInterfaces = append(subInterfaces, sub)
+				ipaddress.IP = ipv4 + "/" + prefix
+				ipaddress.VHID = vhid
+				ipaddress.CARP = carpstat[vhid]["status"]
+				ipaddress.Advbase = carpstat[vhid]["advbase"]
+				ipaddress.Advskew = carpstat[vhid]["advskew"]
+				currentInterface.IpAddresses = append(currentInterface.IpAddresses, ipaddress)
 			}
 		}
 
 		if match := reIPv6.FindAllStringSubmatch(line, -1); match != nil {
 			for _, ip := range match {
+				ipaddress := IPinfo{}
 				ipv6 := ip[reIPv6.SubexpIndex("ipv6")]
 				prefix := ip[reIPv6.SubexpIndex("prefix")]
 				vhid := ip[reIPv6.SubexpIndex("vhid")]
 
-				sub := map[string]string{}
-				sub["ip"] = ipv6 + "/" + prefix
-				sub["vhid"] = vhid
-				subInterfaces = append(subInterfaces, sub)
+				ipaddress.IP = ipv6 + "/" + prefix
+				ipaddress.VHID = vhid
+				ipaddress.CARP = carpstat[vhid]["status"]
+				ipaddress.Advbase = carpstat[vhid]["advbase"]
+				ipaddress.Advskew = carpstat[vhid]["advskew"]
+				currentInterface.IpAddresses = append(currentInterface.IpAddresses, ipaddress)
 			}
 		}
 
-		if match := reCARP.FindAllStringSubmatch(line, -1); match != nil {
-			for _, v := range match {
-				carpStatus := v[reCARP.SubexpIndex("status")]
-				carpVhid := v[reCARP.SubexpIndex("vhid")]
-				carpstat[carpVhid] = carpStatus
-			}
-		}
-
-		if match := reMTU.FindStringSubmatch(line); match != nil {
-			currentInterface.MTU = match[1]
-		}
-
-		// If currentInterface not empty - append
-		if (NetworkInterface{}) != currentInterface {
-			if len(subInterfaces) != 0 {
-				currentInterface.IP = subInterfaces[0]["ip"]
-				currentInterface.Vhid = subInterfaces[0]["vhid"]
-				currentInterface.CARP = carpstat[subInterfaces[0]["vhid"]]
-			}
+		// Add an interface to a slice, only if it has a name
+		if currentInterface.Name != "" {
 			interfaces = append(interfaces, currentInterface)
-		}
-		fmt.Println(currentInterface)
-		fmt.Println(subInterfaces)
-		for i, m := range subInterfaces {
-			if i == 0 {
-				continue
-			}
-			var subIface NetworkInterface
-			subIface.IP = m["ip"]
-			subIface.Vhid = m["vhid"]
-			subIface.CARP = carpstat[m["vhid"]]
-
-			if (NetworkInterface{}) != subIface {
-				// If sub interface not empty, append it
-				interfaces = append(interfaces, subIface)
-			}
 		}
 	}
 
-	// fmt.Println(interfaces)
-	return interfaces
+	if len(interfaces) == 0 {
+		return []NetworkInterface{}, fmt.Errorf("parse failed, there is nothing to parse")
+	}
+
+	return interfaces, nil
 }
 
 // NetmaskHexToPrefix converts hex netmask to prefix lenght:
