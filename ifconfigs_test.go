@@ -115,7 +115,7 @@ func Test_freebsdParser(t *testing.T) {
 
 	// Check IPs
 	if len(iface.IpAddresses) != 3 {
-		t.Error("IP addresses for ipsec not found, must be 4 addresses")
+		t.Error("IP addresses for ipsec not found, must be 3 addresses")
 		return
 	}
 

@@ -95,11 +95,11 @@ func freebsdParser(ifconfig string) ([]NetworkInterface, error) {
 		carpstat := map[string]map[string]string{}
 
 		if match := reName.FindStringSubmatch(line); match != nil {
-			currentInterface.Name = match[1]
+			currentInterface.Name = strings.TrimSpace(match[1])
 		}
 
 		if match := reStatus.FindStringSubmatch(line); match != nil {
-			if match[1] == "active" {
+			if strings.TrimSpace(match[1]) == "active" {
 				currentInterface.Status = "up"
 			} else {
 				currentInterface.Status = "down"
@@ -108,27 +108,27 @@ func freebsdParser(ifconfig string) ([]NetworkInterface, error) {
 		}
 
 		if match := reType.FindStringSubmatch(line); match != nil {
-			currentInterface.Type = match[1]
+			currentInterface.Type = strings.TrimSpace(match[1])
 		}
 
 		if match := reParent.FindStringSubmatch(line); match != nil {
-			currentInterface.Parent = match[1]
+			currentInterface.Parent = strings.TrimSpace(match[1])
 		}
 
 		if match := reVlanID.FindStringSubmatch(line); match != nil {
-			currentInterface.VlanID = match[1]
+			currentInterface.VlanID = strings.TrimSpace(match[1])
 		}
 
 		if match := reMAC.FindStringSubmatch(line); match != nil {
-			currentInterface.MAC = match[1]
+			currentInterface.MAC = strings.TrimSpace(match[1])
 		}
 
 		if match := reDescription.FindStringSubmatch(line); match != nil {
-			currentInterface.Description = match[1]
+			currentInterface.Description = strings.TrimSpace(match[1])
 		}
 
 		if match := reMTU.FindStringSubmatch(line); match != nil {
-			currentInterface.MTU = match[1]
+			currentInterface.MTU = strings.TrimSpace(match[1])
 		}
 
 		if match := reCARP.FindAllStringSubmatch(line, -1); match != nil {
